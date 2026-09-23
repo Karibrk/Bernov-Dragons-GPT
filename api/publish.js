@@ -19,7 +19,7 @@ export default async function handler(req,res){
   const token=process.env.GITHUB_TOKEN,repo=process.env.GITHUB_REPO||'Karibrk/Bernov-Dragons-GPT',branch=process.env.GITHUB_BRANCH||'main';
   if(!token)return res.status(503).json({ok:false,error:'GITHUB_TOKEN missing'});
   const version=String(req.body?.version||''); const html=String(req.body?.html||'');
-  if(!/^\d+\.\d+\.\d+$/.test(version))return res.status(400).json({ok:false,error:'Bad version'});
+  if(!/^\d+(?:\.\d+){2,}$/.test(version))return res.status(400).json({ok:false,error:'Bad version'});
   if(!html.startsWith('<!DOCTYPE html>')||html.length<10000||html.length>6_000_000)return res.status(400).json({ok:false,error:'Bad HTML payload'});
   const filename=`DENÍK_CORE_V${version}.gpt.html`;
   try{
