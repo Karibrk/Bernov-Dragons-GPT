@@ -13,19 +13,27 @@ function suppliedKey(req) {
   return authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
 }
 
-export function requireKey(req, res) {
-  const allowedKeys = [
-    process.env.BANDD_SYNC_KEY,
+function allowedKeys() {
+  return [
     process.env.BANDD_GPT_KEY,
+    process.env.BANDD_SYNC_KEY,
     process.env.BANDD_CLAUDE_KEY,
     process.env.BANDD_GROK_KEY,
   ].filter(Boolean);
-  if (!allowedKeys.length) {
+}
+
+export function isAllowedKey(supplied) {
+  return Boolean(supplied) && allowedKeys().some((expected) => matchesSecret(expected, supplied));
+}
+
+export function requireKey(req, res) {
+  const keys = allowedKeys();
+  if (!keys.length) {
     res.status(503).json({ ok:false, error:'No B&D agent key is configured on Vercel.' });
     return false;
   }
   const got = suppliedKey(req);
-  if (!got || !allowedKeys.some((expected) => matchesSecret(expected, got))) {
+  if (!isAllowedKey(got)) {
     res.status(401).json({ ok:false, error:'Unauthorized' });
     return false;
   }

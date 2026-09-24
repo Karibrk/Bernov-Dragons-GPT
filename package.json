@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@huggingface/inference": "latest",
+    "@modelcontextprotocol/server": "^2.1.0",
     "@vercel/blob": "latest",
-    "@huggingface/inference": "latest"
+    "mcp-handler": "^2.2.0",
+    "zod": "^4.6.5"
   }
 }
