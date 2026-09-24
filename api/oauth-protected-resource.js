@@ -1,6 +1,6 @@
 import { generateProtectedResourceMetadata } from 'mcp-handler';
-import { auth0Issuer, protectedResourceUrl } from '../_mcp-auth.js';
-import { sendWebResponse } from '../_web.js';
+import { auth0Issuer, protectedResourceUrl } from './_mcp-auth.js';
+import { sendWebResponse } from './_web.js';
 
 export default async function handler(req, res) {
   const issuer = auth0Issuer();
