@@ -1,14 +1,31 @@
 import crypto from 'node:crypto';
 
+function matchesSecret(expected, supplied) {
+  const a = Buffer.from(expected);
+  const b = Buffer.from(supplied);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function suppliedKey(req) {
+  const direct = String(req.headers['x-bandd-key'] || '');
+  if (direct) return direct;
+  const authorization = String(req.headers.authorization || '');
+  return authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+}
+
 export function requireKey(req, res) {
-  const expected = process.env.BANDD_SYNC_KEY || '';
-  const got = String(req.headers['x-bandd-key'] || '');
-  if (!expected) {
-    res.status(503).json({ ok:false, error:'BANDD_SYNC_KEY is not configured on Vercel.' });
+  const allowedKeys = [
+    process.env.BANDD_SYNC_KEY,
+    process.env.BANDD_GPT_KEY,
+    process.env.BANDD_CLAUDE_KEY,
+    process.env.BANDD_GROK_KEY,
+  ].filter(Boolean);
+  if (!allowedKeys.length) {
+    res.status(503).json({ ok:false, error:'No B&D agent key is configured on Vercel.' });
     return false;
   }
-  const a = Buffer.from(expected), b = Buffer.from(got);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a,b)) {
+  const got = suppliedKey(req);
+  if (!got || !allowedKeys.some((expected) => matchesSecret(expected, got))) {
     res.status(401).json({ ok:false, error:'Unauthorized' });
     return false;
   }
