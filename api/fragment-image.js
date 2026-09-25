@@ -10,7 +10,9 @@ const REGISTRY={
  mer:{path:'/denik-media/refs/portraits/mer.webp',note:'adult grave cleric; preserve exact face'},
  ula:{path:'/denik-media/refs/portraits/ula.webp',note:'girl appearing about 14; preserve exact face and apparent age'},
  dedek:{path:'/denik-media/refs/portraits/dedek.webp',note:'boy appearing about 11; preserve exact face and apparent age'},
- uhlik:{path:'/denik-media/refs/portraits/Uhlik.jpeg',note:'Uhlík, the campaign dog; preserve his exact coat, markings and proportions'}
+ uhlik:{path:'/denik-media/refs/portraits/Uhlik.jpeg',note:'Uhlík, the campaign dog; preserve his exact coat, markings and proportions'},
+ volo:{path:'/denik-media/refs/portraits/Volo.jpeg',note:'Volo, the campaign scholar; preserve his exact face, age and build'},
+ cerv:{path:'/denik-media/refs/portraits/Cerv.jpeg',note:'the Grave Worm; preserve its canonical creature form, scale and markings'}
 };
 
 function abs(req,p){const proto=String(req.headers['x-forwarded-proto']||'https').split(',')[0];return `${proto}://${req.headers.host}${p}`;}
@@ -21,8 +23,8 @@ async function toBytes(src){
  const r=await fetch(src);if(!r.ok)throw new Error(`Image fetch ${r.status}`);return {type:r.headers.get('content-type')||'image/png',bytes:Buffer.from(await r.arrayBuffer())};
 }
 function promptFor(text,day,refs){
- const identity=refs.length?`Characters in this scene are canonical campaign characters. Preserve the described age, species, build and identity. Canon notes: ${refs.map(r=>r.id+': '+r.note).join('; ')}.`:'No canonical face reference was supplied; avoid close portrait framing of unreferenced named characters.';
- return `Create one cinematic dark-fantasy illustration for a Dungeons & Dragons / Forgotten Realms campaign memory fragment. ${identity}\nScene source of truth: ${text}\nDay: ${day}.\nStyle: grounded cinematic realism, natural medieval materials, subtle painterly finish, emotionally truthful, no glamour posing, no modern objects. Keep hobbits visibly hobbit-sized. Do not add text, captions, logos or UI. Do not invent extra named characters. Landscape 16:9 unless the scene clearly needs a tighter composition.`;
+ const identity=refs.length?`Reference images are identity anchors, in this exact order: ${refs.map((r,i)=>`${i+1}. ${r.id} — ${r.note}`).join('; ')}. Show a referenced character only when the scene names them. For every shown referenced character, reproduce the same person or creature from its matching reference: identical face, age, species, build, hair, coat or markings. Do not substitute, merge, age, beautify, or invent named characters.`:'No canonical reference was supplied; avoid close portrait framing of unreferenced named characters.';
+ return `Create one cinematic dark-fantasy illustration for a Dungeons & Dragons / Forgotten Realms campaign memory fragment. ${identity}\nScene source of truth: ${text}\nDay: ${day}.\nStyle: grounded cinematic realism, natural medieval materials, subtle painterly finish, emotionally truthful, no glamour posing, no modern objects. Keep hobbits visibly hobbit-sized. Do not add text, captions, logos or UI. Compose as a 16:9 landscape scene. Return one high-resolution, lossless PNG image.`;
 }
 function configured(){
  const out=[];
@@ -59,13 +61,14 @@ async function openAIImage(prompt,refs){
 }
 
 async function gatewayImage(prompt,refs){
- const model=process.env.BANDD_IMAGE_MODEL||'google/gemini-3.1-flash-image-preview';
+ const model=process.env.BANDD_IMAGE_MODEL||'google/gemini-3-pro-image';
  const apiKey=process.env.AI_GATEWAY_API_KEY||process.env.VERCEL_OIDC_TOKEN;if(!apiKey)throw Object.assign(new Error('AI Gateway není nakonfigurovaný.'),{code:'PROVIDER_NOT_CONFIGURED'});
  const content=[{type:'text',text:prompt},...refs.map(r=>({type:'image_url',image_url:{url:r.url,detail:'high'}}))];
  const g=await fetch('https://ai-gateway.vercel.sh/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({model,messages:[{role:'user',content}],modalities:['text','image'],stream:false})});
  const raw=await g.text();let j={};try{j=JSON.parse(raw)}catch{j={raw}};
  if(!g.ok){const msg=String(j?.error?.message||raw||'');const type=String(j?.error?.type||'');const billing=g.status===403&&(type==='customer_verification_required'||/credit card|payment method|free credits/i.test(msg));const e=new Error(billing?'Vercel AI Gateway vyžaduje ověřenou platební metodu.':`AI Gateway ${g.status}: ${msg.slice(0,300)}`);e.code=billing?'AI_BILLING_REQUIRED':'AI_GATEWAY_ERROR';throw e;}
  const src=parseGatewayImage(j?.choices?.[0]?.message);if(!src)throw new Error('AI Gateway nevrátil obrázek.');const im=await toBytes(src);
+ if(!['image/png','image/jpeg','image/webp'].includes(im.type))throw new Error(`Nepodporovaný formát obrázku: ${im.type}`);
  return {provider:'gateway',model,type:im.type,bytes:im.bytes};
 }
 
@@ -79,12 +82,12 @@ export default async function handler(req,res){
  const prompt=promptFor(text,day,refs),requested=String(req.body?.provider||'auto').toLowerCase();
  const available=configured();
  if(!available.length)return res.status(503).json({ok:false,code:'PROVIDER_NOT_CONFIGURED',error:'Není nakonfigurovaný žádný generátor.',hint:'Přidej HF_TOKEN, OPENAI_API_KEY nebo zprovozni Vercel AI Gateway.'});
- let order;if(requested==='auto')order=['huggingface','gateway','openai'].filter(x=>available.includes(x));else if(requested==='random')order=shuffled(available);else{if(!available.includes(requested))return res.status(503).json({ok:false,code:'PROVIDER_NOT_CONFIGURED',error:`Provider ${requested} není nakonfigurovaný.`,hint:requested==='huggingface'?'Na Vercelu přidej HF_TOKEN.':requested==='openai'?'Na Vercelu přidej OPENAI_API_KEY.':'Zkontroluj AI Gateway.'});order=[requested];}
+ let order;if(requested==='auto')order=(refs.length?['gateway','openai']:['gateway','openai','huggingface']).filter(x=>available.includes(x));else if(requested==='random')order=shuffled(available);else{if(!available.includes(requested))return res.status(503).json({ok:false,code:'PROVIDER_NOT_CONFIGURED',error:`Provider ${requested} není nakonfigurovaný.`,hint:requested==='huggingface'?'Na Vercelu přidej HF_TOKEN.':requested==='openai'?'Na Vercelu přidej OPENAI_API_KEY.':'Zkontroluj AI Gateway.'});order=[requested];}
  const failures=[];
  for(const provider of order){try{
    const im=await runProvider(provider,prompt,refs);const ext=im.type.includes('webp')?'webp':im.type.includes('jpeg')?'jpg':'png';const path=`art/fragments/day-${String(day).padStart(3,'0')}/${slug(id)}-${Date.now()}.${ext}`;
    const blob=await put(path,im.bytes,{access:'public',contentType:im.type,addRandomSuffix:false,...blobAuth()});
-   return res.status(200).json({ok:true,url:blob.url,pathname:blob.pathname,provider:im.provider,model:im.model,characters:chars,references:provider==='huggingface'?[]:refs.map(r=>r.id),createdAt:new Date().toISOString(),tried:failures.map(x=>x.provider).concat(provider)});
+   return res.status(200).json({ok:true,url:blob.url,pathname:blob.pathname,format:im.type,provider:im.provider,model:im.model,characters:chars,references:provider==='huggingface'?[]:refs.map(r=>r.id),createdAt:new Date().toISOString(),tried:failures.map(x=>x.provider).concat(provider)});
   }catch(e){failures.push({provider,error:String(e.message||e).slice(0,260),code:e.code||''});}}
  const billingOnly=failures.length&&failures.every(x=>x.code==='AI_BILLING_REQUIRED');
  return res.status(billingOnly?424:502).json({ok:false,code:billingOnly?'AI_BILLING_REQUIRED':'ALL_PROVIDERS_FAILED',error:'Žádný zvolený generátor nedokončil obrázek.',failures});

@@ -609,8 +609,8 @@ function cloudAsk(){var k=cloudKey();if(k)return k;k=prompt("Cloud klíč B&D �
 function cloudHeaders(){var k=cloudKey();return {"Content-Type":"application/json","x-bandd-key":k};}
 function imageProvider(){try{return localStorage.getItem("bandd.image.provider")||"auto";}catch(e){return "auto";}}
 function imageProviderSet(v){v=v||"auto";try{localStorage.setItem("bandd.image.provider",v);}catch(e){}var txt="✦ Generátor obrázků: "+imageProviderLabel(v);imggenPush("provider",txt);msg(txt);}
-function imageProviderLabel(v){return ({auto:"Auto · free první",huggingface:"Hugging Face · free kredity",gateway:"Vercel AI Gateway",openai:"OpenAI",random:"Náhodně"})[v]||v;}
-function imageProviderOptions(){var cur=imageProvider(),opts=[["auto","Auto · free první"],["huggingface","Hugging Face · free kredity"],["gateway","Vercel AI Gateway"],["openai","OpenAI"],["random","Náhodně"]];return opts.map(function(o){return '<option value="'+o[0]+'"'+(cur===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join("");}
+function imageProviderLabel(v){return ({auto:"Auto · portréty (doporučeno)",huggingface:"Hugging Face · free kredity",gateway:"Vercel AI Gateway",openai:"OpenAI",random:"Náhodně"})[v]||v;}
+function imageProviderOptions(){var cur=imageProvider(),opts=[["auto","Auto · portréty (doporučeno)"],["huggingface","Hugging Face · free kredity"],["gateway","Vercel AI Gateway"],["openai","OpenAI"],["random","Náhodně"]];return opts.map(function(o){return '<option value="'+o[0]+'"'+(cur===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join("");}
 function imggenState(){
  if(!S.imggen||typeof S.imggen!=="object")S.imggen={status:"Připraveno.",log:[],lastSystem:""};
  if(!Array.isArray(S.imggen.log))S.imggen.log=[];
@@ -697,7 +697,7 @@ async function cloudPublish(){var k=cloudAsk();if(!k)return;var ver=D.VERSION||"
  try{msg("Publikuji na GitHub…");var r=await fetch("/api/publish",{method:"POST",headers:cloudHeaders(),body:JSON.stringify({version:ver,html:selfHtml()})});
  if(!r.ok)throw new Error((await r.text()).slice(0,260));var j=await r.json();msg("✓ Publikováno: "+j.filename);
  }catch(e){msg("Publikace selhala: "+e.message);}}
-function inferLifeCharacters(t){t=(t||"").toLowerCase();var map={karibrk:["karibrk","kari","tati"],elie:["elie"],ula:["ula"],tina:["tina"],sandor:["sandor"],mer:["mer"],dedek:["dědek","dedek"],uhlik:["uhlík","uhlik","pes"]},o=[];
+function inferLifeCharacters(t){t=(t||"").toLowerCase();var map={karibrk:["karibrk","kari","tati"],elie:["elie"],ula:["ula"],tina:["tina"],sandor:["sandor"],mer:["mer"],dedek:["dědek","dedek"],uhlik:["uhlík","uhlik","pes"],volo:["volo"],cerv:["hrobový červ","hrobovy cerv","červ","cerv"]},o=[];
  Object.keys(map).forEach(function(id){for(var i=0;i<map[id].length;i++)if(t.indexOf(map[id][i])>=0){o.push(id);break;}});return o;}
 async function lifeAI(id){var rec=null;(S.life||[]).forEach(function(x){if(x.id===id)rec=x;});if(!rec)return;var k=cloudAsk();if(!k)return;
  var pref=imageProvider();
@@ -710,7 +710,7 @@ async function lifeAI(id){var rec=null;(S.life||[]).forEach(function(x){if(x.id=
   if(r.status===401)throw new Error("Cloud klíč nesouhlasí. Otevři Přenos → Připojit cloud a ulož správný klíč.");
   throw new Error(j.error||("HTTP "+r.status));
  }
- rec.img=j.url;rec.imageMeta={model:j.model,provider:j.provider||"",characters:j.characters||[],references:j.references||[],createdAt:j.createdAt};save();drawZS();var okMsg="✦ Obrázek hotový přes "+imageProviderLabel(j.provider||pref)+" a uložený v Blob.";imggenPush("ok",okMsg);msg(okMsg);
+ rec.img=j.url;rec.imageMeta={model:j.model,provider:j.provider||"",format:j.format||"image/png",characters:j.characters||[],references:j.references||[],createdAt:j.createdAt};save();drawZS();var okMsg="✦ Obrázek hotový přes "+imageProviderLabel(j.provider||pref)+" a uložený v Blob.";imggenPush("ok",okMsg);msg(okMsg);
  }catch(e){var errMsg="AI obrázek: "+e.message;imggenPush("error",errMsg);msg(errMsg);}}
 
 
