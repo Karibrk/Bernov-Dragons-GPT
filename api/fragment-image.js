@@ -1,6 +1,7 @@
 import { put } from '@vercel/blob';
 import { InferenceClient } from '@huggingface/inference';
-import { requireKey, blobAuth } from './_auth.js';
+import { requireKey, requirePaidImagePassword, blobAuth } from './_auth.js';
+import { gatewayCredits } from './image-spend.js';
 
 const REGISTRY={
  karibrk:{path:'/denik-media/refs/portraits/karibrk.webp',note:'adult male hobbit necromancer; preserve exact face and hobbit proportions'},
@@ -79,15 +80,19 @@ export default async function handler(req,res){
  const id=String(req.body?.id||'fragment'),day=Number(req.body?.day||0),text=String(req.body?.text||'').trim();if(!text)return res.status(400).json({ok:false,error:'Missing fragment text'});
  const chars=Array.isArray(req.body?.characters)?req.body.characters.filter(x=>REGISTRY[x]):[];
  const refs=chars.map(c=>({id:c,url:abs(req,REGISTRY[c].path),note:REGISTRY[c].note}));
- const prompt=promptFor(text,day,refs),requested=String(req.body?.provider||'auto').toLowerCase();
+ const prompt=promptFor(text,day,refs),requested=String(req.body?.provider||'free').toLowerCase();
  const available=configured();
  if(!available.length)return res.status(503).json({ok:false,code:'PROVIDER_NOT_CONFIGURED',error:'Není nakonfigurovaný žádný generátor.',hint:'Přidej HF_TOKEN, OPENAI_API_KEY nebo zprovozni Vercel AI Gateway.'});
- let order;if(requested==='auto')order=(refs.length?['gateway','openai']:['gateway','openai','huggingface']).filter(x=>available.includes(x));else if(requested==='random')order=shuffled(available);else{if(!available.includes(requested))return res.status(503).json({ok:false,code:'PROVIDER_NOT_CONFIGURED',error:`Provider ${requested} není nakonfigurovaný.`,hint:requested==='huggingface'?'Na Vercelu přidej HF_TOKEN.':requested==='openai'?'Na Vercelu přidej OPENAI_API_KEY.':'Zkontroluj AI Gateway.'});order=[requested];}
+ let order;
+ if(requested==='free'||requested==='huggingface'||requested==='auto'){if(!available.includes('huggingface'))return res.status(503).json({ok:false,code:'PROVIDER_NOT_CONFIGURED',error:'Bezplatný generátor není nakonfigurovaný.',hint:'Na Vercelu přidej HF_TOKEN.'});order=['huggingface'];}
+ else if(requested==='paid'||requested==='gateway'){if(!requirePaidImagePassword(req,res))return;if(!available.includes('gateway'))return res.status(503).json({ok:false,code:'PROVIDER_NOT_CONFIGURED',error:'Placený generátor není nakonfigurovaný.',hint:'Zkontroluj AI Gateway.'});order=['gateway'];}
+ else return res.status(400).json({ok:false,error:'Neznámý režim generování.'});
  const failures=[];
  for(const provider of order){try{
    const im=await runProvider(provider,prompt,refs);const ext=im.type.includes('webp')?'webp':im.type.includes('jpeg')?'jpg':'png';const path=`art/fragments/day-${String(day).padStart(3,'0')}/${slug(id)}-${Date.now()}.${ext}`;
    const blob=await put(path,im.bytes,{access:'public',contentType:im.type,addRandomSuffix:false,...blobAuth()});
-   return res.status(200).json({ok:true,url:blob.url,pathname:blob.pathname,format:im.type,provider:im.provider,model:im.model,characters:chars,references:provider==='huggingface'?[]:refs.map(r=>r.id),createdAt:new Date().toISOString(),tried:failures.map(x=>x.provider).concat(provider)});
+   const credits=provider==='gateway'?await gatewayCredits():null;
+   return res.status(200).json({ok:true,url:blob.url,pathname:blob.pathname,format:im.type,provider:im.provider,model:im.model,characters:chars,references:provider==='huggingface'?[]:refs.map(r=>r.id),creditsRemaining:credits?.remaining??null,createdAt:new Date().toISOString(),tried:failures.map(x=>x.provider).concat(provider)});
   }catch(e){failures.push({provider,error:String(e.message||e).slice(0,260),code:e.code||''});}}
  const billingOnly=failures.length&&failures.every(x=>x.code==='AI_BILLING_REQUIRED');
  return res.status(billingOnly?424:502).json({ok:false,code:billingOnly?'AI_BILLING_REQUIRED':'ALL_PROVIDERS_FAILED',error:'Žádný zvolený generátor nedokončil obrázek.',failures});

@@ -607,10 +607,12 @@ function cloudRemember(k){if(!k)return;try{localStorage.setItem("bandd.sync.key"
 function cloudAsk(){var k=cloudKey();if(k)return k;k=prompt("Cloud klíč B&D — zadáš jednou, zařízení si ho zapamatuje:")||"";
  if(k)cloudRemember(k);return k;}
 function cloudHeaders(){var k=cloudKey();return {"Content-Type":"application/json","x-bandd-key":k};}
-function imageProvider(){try{return localStorage.getItem("bandd.image.provider")||"auto";}catch(e){return "auto";}}
+function imageProvider(){try{var v=localStorage.getItem("bandd.image.provider")||"free";return v==="auto"?"free":v;}catch(e){return "free";}}
 function imageProviderSet(v){v=v||"auto";try{localStorage.setItem("bandd.image.provider",v);}catch(e){}var txt="✦ Generátor obrázků: "+imageProviderLabel(v);imggenPush("provider",txt);msg(txt);}
-function imageProviderLabel(v){return ({auto:"Auto · portréty (doporučeno)",huggingface:"Hugging Face · free kredity",gateway:"Vercel AI Gateway",openai:"OpenAI",random:"Náhodně"})[v]||v;}
-function imageProviderOptions(){var cur=imageProvider(),opts=[["auto","Auto · portréty (doporučeno)"],["huggingface","Hugging Face · free kredity"],["gateway","Vercel AI Gateway"],["openai","OpenAI"],["random","Náhodně"]];return opts.map(function(o){return '<option value="'+o[0]+'"'+(cur===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join("");}
+function imageProviderLabel(v){return ({free:"Bezplatné · Hugging Face",paid:"Placené · Vercel AI Gateway"})[v]||v;}
+function imageProviderOptions(){var cur=imageProvider(),opts=[["free","Bezplatné · Hugging Face"],["paid","Placené · Vercel AI Gateway"]];return opts.map(function(o){return '<option value="'+o[0]+'"'+(cur===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join("");}
+async function imageSpend(){var k=cloudAsk();if(!k)return null;try{var r=await fetch("/api/image-spend",{headers:{"x-bandd-key":k}});if(!r.ok)throw new Error();return await r.json();}catch(e){return null;}}
+function paidImagePassword(){return prompt("Heslo pro placené generování (cloudový B&D klíč):")||"";}
 function imggenState(){
  if(!S.imggen||typeof S.imggen!=="object")S.imggen={status:"Připraveno.",log:[],lastSystem:""};
  if(!Array.isArray(S.imggen.log))S.imggen.log=[];
@@ -640,7 +642,7 @@ function imggenClear(){
 function imgGenPanel(){
  var g=imggenState();
  return '<div class="box hi"><h3 class="lbl" style="color:var(--furn);border-bottom-color:var(--furnd)">AI obrazárna</h3>'+
-  '<p class="hint" style="margin-top:0">Provider nastavíš tady nahoře. Samotná tlačítka ✦ AI obrázek zůstávají u jednotlivých střípků, ale už kvůli provideru nemusíš rolovat dolů.</p>'+
+  '<p class="hint" style="margin-top:0">Vyber bezplatný Hugging Face nebo placený Vercel AI Gateway. Placený režim vyžaduje heslo, nic nedobíjí ani nekupuje automaticky. Nano Banana Pro: od $0.13 za obraz + tokenová spotřeba.</p>'+
   '<div class="row" style="margin:4px 0 10px"><span class="chip">🎨 provider</span><select id="imgProviderTop" onchange="imageProviderSet(this.value)" style="max-width:280px">'+imageProviderOptions()+'</select><button class="sm" data-a="goto" data-v="stripky">Otevřít Střípky</button><button class="sm" data-a="imglogclear">Vyčistit log</button></div>'+
   '<div class="pline"><b>Aktuální stav</b><span id="imgGenStatus">'+esc(g.status||"Připraveno.")+'</span></div>'+
   '<div class="pline"><b>Poslední zpráva systému</b><span id="imgSysLast">'+esc(g.lastSystem||"—")+'</span></div>'+
@@ -700,17 +702,19 @@ async function cloudPublish(){var k=cloudAsk();if(!k)return;var ver=D.VERSION||"
 function inferLifeCharacters(t){t=(t||"").toLowerCase();var map={karibrk:["karibrk","kari","tati"],elie:["elie"],ula:["ula"],tina:["tina"],sandor:["sandor"],mer:["mer"],dedek:["dědek","dedek"],uhlik:["uhlík","uhlik","pes"],volo:["volo"],cerv:["hrobový červ","hrobovy cerv","červ","cerv"]},o=[];
  Object.keys(map).forEach(function(id){for(var i=0;i<map[id].length;i++)if(t.indexOf(map[id][i])>=0){o.push(id);break;}});return o;}
 async function lifeAI(id){var rec=null;(S.life||[]).forEach(function(x){if(x.id===id)rec=x;});if(!rec)return;var k=cloudAsk();if(!k)return;
- var pref=imageProvider();
- try{var startMsg="✦ Generuji obraz pro "+id+" · "+imageProviderLabel(pref)+"…";imggenPush("start",startMsg);msg(startMsg);var r=await fetch("/api/fragment-image",{method:"POST",headers:cloudHeaders(),body:JSON.stringify({id:rec.id,day:rec.d,text:strip(rec.t||""),characters:inferLifeCharacters(rec.t||""),provider:pref})});
+ var pref=imageProvider(), paidPassword="";
+ if(pref==="paid"){var spend=await imageSpend();if(!spend||!spend.available||typeof spend.remaining!=="number"){msg("Placený zůstatek AI Gateway teď není dostupný; generování bylo zablokováno.");return;}paidPassword=paidImagePassword();if(!paidPassword)return;msg("AI Gateway: zbývá $"+spend.remaining.toFixed(4)+". Sazba Nano Banana Pro začíná na $0.13 za obraz plus tokenová spotřeba.");}
+ try{var startMsg="✦ Generuji obraz pro "+id+" · "+imageProviderLabel(pref)+"…";imggenPush("start",startMsg);msg(startMsg);var r=await fetch("/api/fragment-image",{method:"POST",headers:cloudHeaders(),body:JSON.stringify({id:rec.id,day:rec.d,text:strip(rec.t||""),characters:inferLifeCharacters(rec.t||""),provider:pref,paidPassword:paidPassword})});
  var j={};try{j=await r.json();}catch(_e){}
  if(!r.ok){
+  if(j.code==="PAID_PASSWORD_REQUIRED")throw new Error("Heslo pro placené generování nesouhlasí.");
   if(j.code==="AI_BILLING_REQUIRED")throw new Error("Vercel AI Gateway chce ověřenou platební metodu. Přepni generátor na Hugging Face, nebo přidej jiného providera.");
   if(j.code==="PROVIDER_NOT_CONFIGURED")throw new Error("Zvolený poskytovatel nemá na Vercelu API klíč. "+(j.hint||""));
   if(j.code==="ALL_PROVIDERS_FAILED")throw new Error("Všechny dostupné generátory selhaly. "+((j.failures||[]).map(function(x){return x.provider+": "+x.error;}).join(" · ")));
   if(r.status===401)throw new Error("Cloud klíč nesouhlasí. Otevři Přenos → Připojit cloud a ulož správný klíč.");
   throw new Error(j.error||("HTTP "+r.status));
  }
- rec.img=j.url;rec.imageMeta={model:j.model,provider:j.provider||"",format:j.format||"image/png",characters:j.characters||[],references:j.references||[],createdAt:j.createdAt};save();drawZS();var okMsg="✦ Obrázek hotový přes "+imageProviderLabel(j.provider||pref)+" a uložený v Blob.";imggenPush("ok",okMsg);msg(okMsg);
+ rec.img=j.url;rec.imageMeta={model:j.model,provider:j.provider||"",format:j.format||"image/png",characters:j.characters||[],references:j.references||[],createdAt:j.createdAt};save();drawZS();var okMsg="✦ Obrázek hotový přes "+imageProviderLabel(pref)+" a uložený v Blob."+(pref==="paid"?(typeof j.creditsRemaining==="number"?" Zbývá: $"+j.creditsRemaining.toFixed(4)+".":" Zůstatek se nepodařilo načíst."):"");imggenPush("ok",okMsg);msg(okMsg);
  }catch(e){var errMsg="AI obrázek: "+e.message;imggenPush("error",errMsg);msg(errMsg);}}
 
 
