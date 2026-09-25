@@ -6,6 +6,13 @@ import { blobAuth } from './_auth.js';
 const STATE_PATH = 'runtime/latest.json';
 const BACKUP_PREFIX = 'runtime/backups/state-';
 
+function stateBlobAuth() {
+  const storeId = process.env.STATE_BLOB_STORE_ID;
+  const oidcToken = process.env.VERCEL_OIDC_TOKEN;
+  if (storeId && oidcToken) return { storeId, oidcToken };
+  return blobAuth();
+}
+
 function stateCipherKey() {
   const secret = process.env.BANDD_SYNC_KEY || process.env.BANDD_GPT_KEY || '';
   if (!secret) throw new Error('No B&D state encryption key is configured');
@@ -36,9 +43,9 @@ function decryptState(text) {
 
 export async function loadState() {
   const result = await get(STATE_PATH, {
-    access: 'public',
+    access: 'private',
     useCache: false,
-    ...blobAuth(),
+    ...stateBlobAuth(),
   });
   if (!result || result.statusCode !== 200) return null;
   let text = '';
@@ -53,12 +60,12 @@ export async function saveState(state) {
   const savedAt = new Date().toISOString();
   const payload = encryptState({ savedAt, state });
   const safeStamp = savedAt.replace(/[:.]/g, '-');
-  const auth = blobAuth();
+  const auth = stateBlobAuth();
   await put(`${BACKUP_PREFIX}${safeStamp}.json`, payload, {
-    access: 'public', contentType: 'application/json', addRandomSuffix: false, ...auth,
+    access: 'private', contentType: 'application/json', addRandomSuffix: false, ...auth,
   });
   await put(STATE_PATH, payload, {
-    access: 'public', contentType: 'application/json', allowOverwrite: true, addRandomSuffix: false, ...auth,
+    access: 'private', contentType: 'application/json', allowOverwrite: true, addRandomSuffix: false, ...auth,
   });
   return { ok: true, savedAt };
 }
