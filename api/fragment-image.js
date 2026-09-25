@@ -10,9 +10,9 @@ const REGISTRY={
  mer:{path:'/denik-media/refs/portraits/mer.webp',note:'adult grave cleric; preserve exact face'},
  ula:{path:'/denik-media/refs/portraits/ula.webp',note:'girl appearing about 14; preserve exact face and apparent age'},
  dedek:{path:'/denik-media/refs/portraits/dedek.webp',note:'boy appearing about 11; preserve exact face and apparent age'},
- uhlik:{path:'/denik-media/refs/portraits/Uhlik.jpeg',note:'Uhlík, the campaign dog; preserve his exact coat, markings and proportions'},
- volo:{path:'/denik-media/refs/portraits/Volo.jpeg',note:'Volo, the campaign scholar; preserve his exact face, age and build'},
- cerv:{path:'/denik-media/refs/portraits/Cerv.jpeg',note:'the Grave Worm; preserve its canonical creature form, scale and markings'}
+ uhlik:{path:'/denik-media/refs/portraits/Uhlik.png',note:'Uhlík, the campaign dog; preserve his exact coat, markings and proportions'},
+ volo:{path:'/denik-media/refs/portraits/Volo.png',note:'Volo, the campaign scholar; preserve his exact face, age and build'},
+ cerv:{path:'/denik-media/refs/portraits/Cerv.png',note:'the Grave Worm; preserve its canonical creature form, scale and markings'}
 };
 
 function abs(req,p){const proto=String(req.headers['x-forwarded-proto']||'https').split(',')[0];return `${proto}://${req.headers.host}${p}`;}
