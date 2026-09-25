@@ -1,6 +1,7 @@
 import { readdir, mkdir, cp, rm, readFile, writeFile } from 'node:fs/promises';
 
-const RELEASE_RX = /^DENÍK_CORE_V(\d+\.\d+\.\d+\.\d+)\.gpt\.html$/;
+// Accept existing ASCII release files as well as the canonical Czech spelling.
+const RELEASE_RX = /^DEN[IÍ]K_CORE_V(\d+\.\d+\.\d+\.\d+)\.gpt\.html$/;
 
 function parseVersion(version) {
   return version.split('.').map((part) => {
