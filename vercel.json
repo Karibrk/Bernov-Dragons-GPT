@@ -1,5 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "node build-latest.mjs",
+  "outputDirectory": "dist",
   "functions": {
     "api/fragment-image.js": {
       "maxDuration": 60
