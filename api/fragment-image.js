@@ -3,6 +3,7 @@ import { InferenceClient } from '@huggingface/inference';
 import { requireKey, requirePaidImagePassword, blobAuth } from './_auth.js';
 import { gatewayCredits } from './image-spend.js';
 
+const GENERATED_ASSET_ROOT='art';
 const ASSET_CATEGORIES=new Set(['fragments','chronicle','characters','items','maps','locations','creatures','scenes']);
 
 const REGISTRY={
@@ -91,7 +92,7 @@ export default async function handler(req,res){
  else return res.status(400).json({ok:false,error:'Neznámý režim generování.'});
  const failures=[];
  for(const provider of order){try{
-   const im=await runProvider(provider,prompt,refs);const ext=im.type.includes('webp')?'webp':im.type.includes('jpeg')?'jpg':'png';const path=`art/${category}/day-${String(day).padStart(3,'0')}/${slug(id)}-${Date.now()}.${ext}`;
+   const im=await runProvider(provider,prompt,refs);const ext=im.type.includes('webp')?'webp':im.type.includes('jpeg')?'jpg':'png';const path=`${GENERATED_ASSET_ROOT}/${category}/day-${String(day).padStart(3,'0')}/${slug(id)}-${Date.now()}.${ext}`;
    const blob=await put(path,im.bytes,{access:'public',contentType:im.type,addRandomSuffix:false,...blobAuth()});
    const credits=provider==='gateway'?await gatewayCredits():null;
    return res.status(200).json({ok:true,url:blob.url,pathname:blob.pathname,category,format:im.type,provider:im.provider,model:im.model,characters:chars,references:provider==='huggingface'?[]:refs.map(r=>r.id),creditsRemaining:credits?.remaining??null,createdAt:new Date().toISOString(),tried:failures.map(x=>x.provider).concat(provider)});

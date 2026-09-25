@@ -417,10 +417,12 @@ var KEY="denik.v4";
 
 /* --- pomocné --- */
 function $(s){return document.querySelector(s);}
-/* ---------- OBRÁZKY (AI_IMAGE_GUIDE): denik-media/, když soubor chybí, img zmizí ---------- */
-var MEDIA="denik-media/";
+/* ---------- VESTAVĚNÁ MÉDIA: denik-media/; generované obrázky jsou vždy ve Vercel Blob pod art/<kategorie>/ ---------- */
+var STATIC_MEDIA_ROOT="denik-media/";
+var GENERATED_IMAGE_ROOT="art/";
+var MEDIA=STATIC_MEDIA_ROOT;
 function slug(s){return String(s==null?"":s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");}
-/* pevná struktura denik-media: portraits, avatars, npcs, locations, items, icons, other, data */
+/* Pevná struktura vestavěných médií: portraits, avatars, npcs, locations, items, icons, other, data. */
 var MDIRS={portraits:["portraits","avatars","npcs"],companions:["npcs","avatars"],maps:["locations"],items:["items","icons"],other:["other"]};
 function mpaths(dir,names){var o=[],ds=MDIRS[dir]||[dir];ds.forEach(function(d){names.forEach(function(n){if(!n)return;["webp","png","jpeg","jpg"].forEach(function(x){var p=d+"/"+n+"."+x;if(o.indexOf(p)<0)o.push(p);});});});return o;}
 function mimg(list,cls){if(!list||!list.length)return "";
@@ -568,6 +570,18 @@ function safeDraw(name,fn,target){
    if(n)n.innerHTML='<div class="box warn"><b>'+esc(name)+' se nepodařilo vykreslit.</b><p class="hint">Starší uložený stav byl zachován. Obnov stránku; pokud problém trvá, otevři Přenos a stáhni zálohu. Technicky: '+esc(e&&e.message?e.message:String(e))+'</p></div>';
  }
 }
+function generatedImageCategory(url){
+ var m=new RegExp('/'+GENERATED_IMAGE_ROOT+'([^/]+)/').exec(String(url||''));
+ return m&&IMAGE_CATEGORIES.some(function(x){return x[0]===m[1];})?m[1]:"fragments";
+}
+function normalizeGeneratedImageState(){
+ (S.life||[]).forEach(function(rec){
+  if(!rec)return;
+  var category=generatedImageCategory(rec.img);
+  if(!rec.imageCategory)rec.imageCategory=(rec.source&&rec.source.kind==="kronika")?"chronicle":category;
+  if(rec.imageMeta&& !rec.imageMeta.category)rec.imageMeta.category=rec.imageCategory;
+ });
+}
 function postInit(){
  normalizeHostedState();
  if(!S.bag) S.bag=JSON.parse(JSON.stringify(BAG_SEED||[]));
@@ -580,6 +594,7 @@ function postInit(){
  if(!S.verdict) S.verdict={}; if(!S.lore) S.lore=[]; if(!S.loreDel) S.loreDel=[];
  if(!S.resources) S.resources={};
  if(!S.life) S.life=[]; if(!S.lifeGone) S.lifeGone=[];
+ normalizeGeneratedImageState();
  if(!S.imggen||typeof S.imggen!=="object") S.imggen={status:"Připraveno.",log:[],lastSystem:""};
  if(!Array.isArray(S.imggen.log)) S.imggen.log=[];
  if(S.imggen.status===undefined) S.imggen.status="Připraveno.";
@@ -1644,7 +1659,7 @@ function minionBox(id,c){
  var lv='';for(var L=1;L<=9;L++)lv+='<option value="'+L+'"'+(L===3?' selected':'')+'>pozice '+L+'.</option>';
  h+='<div class="row" style="margin-top:10px;flex-wrap:wrap;gap:6px"><select id="mnT">'+opt+'</select><select id="mnL">'+lv+'</select>'+
    '<button class="sm go" data-a="mnadd">☠ Vyvolat</button>'+(A.length?'<button class="sm" data-a="mnconc">Ztráta soustředění</button><button class="sm" data-a="mnclear">Rozpustit vše</button>':'')+'</div>';
- h+='<p class="hint" style="margin-top:6px">Životy už obsahují Nemrtvé poddané (+'+NP_HP+'), útoky +5 ke zranění. Pozice pod základní úrovní kouzla se zvedne na základní. Statistiky a pravidla: Lore → Hrobopis. Obrázky: denik-media/companions/&lt;slug&gt;.webp</p>';
+ h+='<p class="hint" style="margin-top:6px">Životy už obsahují Nemrtvé poddané (+'+NP_HP+'), útoky +5 ke zranění. Pozice pod základní úrovní kouzla se zvedne na základní. Statistiky a pravidla: Lore → Hrobopis. Vestavěné portréty: denik-media/refs/portraits; generované obrázky: art/&lt;kategorie&gt;/</p>';
  return h+'</div>';}
 function prepList(id){
  var c=CHARS[id], out=[];
