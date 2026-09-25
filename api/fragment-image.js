@@ -1,5 +1,6 @@
 import { put } from '@vercel/blob';
 import { InferenceClient } from '@huggingface/inference';
+import sharp from 'sharp';
 import { requireKey, requirePaidImagePassword, blobAuth } from './_auth.js';
 import { gatewayCredits } from './image-spend.js';
 
@@ -14,9 +15,9 @@ const REGISTRY={
  mer:{path:'/denik-media/refs/portraits/mer.webp',note:'adult grave cleric; preserve exact face'},
  ula:{path:'/denik-media/refs/portraits/ula.webp',note:'girl appearing about 14; preserve exact face and apparent age'},
  dedek:{path:'/denik-media/refs/portraits/dedek.webp',note:'boy appearing about 11; preserve exact face and apparent age'},
- uhlik:{path:'/denik-media/refs/portraits/Uhlik.png',note:'Uhlík, the campaign dog; preserve his exact coat, markings and proportions'},
- volo:{path:'/denik-media/refs/portraits/Volo.png',note:'Volo, the campaign scholar; preserve his exact face, age and build'},
- cerv:{path:'/denik-media/refs/portraits/Cerv.png',note:'the Grave Worm; preserve its canonical creature form, scale and markings'}
+ uhlik:{path:'/denik-media/refs/portraits/Uhlik.webp',note:'Uhlík, the campaign dog; preserve his exact coat, markings and proportions'},
+ volo:{path:'/denik-media/refs/portraits/Volo.webp',note:'Volo, the campaign scholar; preserve his exact face, age and build'},
+ cerv:{path:'/denik-media/refs/portraits/Cerv.webp',note:'the Grave Worm; preserve its canonical creature form, scale and markings'}
 };
 
 function abs(req,p){const proto=String(req.headers['x-forwarded-proto']||'https').split(',')[0];return `${proto}://${req.headers.host}${p}`;}
@@ -28,7 +29,7 @@ async function toBytes(src){
 }
 function promptFor(text,day,refs){
  const identity=refs.length?`Reference images are identity anchors, in this exact order: ${refs.map((r,i)=>`${i+1}. ${r.id} — ${r.note}`).join('; ')}. Show a referenced character only when the scene names them. For every shown referenced character, reproduce the same person or creature from its matching reference: identical face, age, species, build, hair, coat or markings. Do not substitute, merge, age, beautify, or invent named characters.`:'No canonical reference was supplied; avoid close portrait framing of unreferenced named characters.';
- return `Create one cinematic dark-fantasy illustration for a Dungeons & Dragons / Forgotten Realms campaign memory fragment. ${identity}\nScene source of truth: ${text}\nDay: ${day}.\nStyle: grounded cinematic realism, natural medieval materials, subtle painterly finish, emotionally truthful, no glamour posing, no modern objects. Keep hobbits visibly hobbit-sized. Do not add text, captions, logos or UI. Compose as a 16:9 landscape scene. Return one high-resolution, lossless PNG image.`;
+ return `Create one cinematic dark-fantasy illustration for a Dungeons & Dragons / Forgotten Realms campaign memory fragment. ${identity}\nScene source of truth: ${text}\nDay: ${day}.\nStyle: grounded cinematic realism, natural medieval materials, subtle painterly finish, emotionally truthful, no glamour posing, no modern objects. Keep hobbits visibly hobbit-sized. Do not add text, captions, logos or UI. Compose as a 16:9 landscape scene. Return one high-resolution 16:9 image.`;
 }
 function configured(){
  const out=[];
@@ -76,6 +77,11 @@ async function gatewayImage(prompt,refs){
  return {provider:'gateway',model,type:im.type,bytes:im.bytes};
 }
 
+async function asWebp(image) {
+ const bytes = await sharp(image.bytes).webp({ quality: 88, effort: 4 }).toBuffer();
+ return { ...image, type: 'image/webp', bytes };
+}
+
 async function runProvider(name,prompt,refs){if(name==='huggingface')return huggingFaceImage(prompt);if(name==='gateway')return gatewayImage(prompt,refs);if(name==='openai')return openAIImage(prompt,refs);throw new Error(`Neznámý provider ${name}`);}
 
 export default async function handler(req,res){
@@ -92,7 +98,7 @@ export default async function handler(req,res){
  else return res.status(400).json({ok:false,error:'Neznámý režim generování.'});
  const failures=[];
  for(const provider of order){try{
-   const im=await runProvider(provider,prompt,refs);const ext=im.type.includes('webp')?'webp':im.type.includes('jpeg')?'jpg':'png';const path=`${GENERATED_ASSET_ROOT}/${category}/day-${String(day).padStart(3,'0')}/${slug(id)}-${Date.now()}.${ext}`;
+   const im=await asWebp(await runProvider(provider,prompt,refs));const path=`${GENERATED_ASSET_ROOT}/${category}/day-${String(day).padStart(3,'0')}/${slug(id)}-${Date.now()}.webp`;
    const blob=await put(path,im.bytes,{access:'public',contentType:im.type,addRandomSuffix:false,...blobAuth()});
    const credits=provider==='gateway'?await gatewayCredits():null;
    return res.status(200).json({ok:true,url:blob.url,pathname:blob.pathname,category,format:im.type,provider:im.provider,model:im.model,characters:chars,references:provider==='huggingface'?[]:refs.map(r=>r.id),creditsRemaining:credits?.remaining??null,createdAt:new Date().toISOString(),tried:failures.map(x=>x.provider).concat(provider)});
