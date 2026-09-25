@@ -7,7 +7,18 @@ const STATE_PATH = 'runtime/latest.json';
 const BACKUP_PREFIX = 'runtime/backups/state-';
 
 function stateCipherKey() {
-  const secret = process.env.BANDD_SYNC_KEY || process.env.BANDD_GPT_KEY || '';
+  // Must cover every key accepted by allowedKeys() in _auth.js so that any
+  // supported auth-only deployment (e.g. CLAUDE- or GROK-only) can still
+  // encrypt/decrypt state. A dedicated BANDD_STATE_KEY is preferred so the
+  // encryption secret can stay stable even if auth keys are later added or
+  // rotated (which would otherwise make previously stored state undecryptable).
+  const secret =
+    process.env.BANDD_STATE_KEY ||
+    process.env.BANDD_SYNC_KEY ||
+    process.env.BANDD_GPT_KEY ||
+    process.env.BANDD_CLAUDE_KEY ||
+    process.env.BANDD_GROK_KEY ||
+    '';
   if (!secret) throw new Error('No B&D state encryption key is configured');
   return crypto.scryptSync(secret, 'bernov-dragons-state-v1', 32);
 }
