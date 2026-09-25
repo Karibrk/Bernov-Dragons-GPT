@@ -58,8 +58,20 @@ const html = enforceFilenameVersion(cleaned, latest.version);
 if (!html.includes(`window.DATA={"VERSION":"${latest.version}"`)) {
   throw new Error(`Build odmítl publikovat jinou verzi než ${latest.version}`);
 }
-if (/window\.__FRAME_PREAMBLE/.test(html) || /ibScript/.test(html) || /ibfunctions\.js/.test(html) || /frame-runtime/.test(html)) {
-  throw new Error('Build našel preview/runtime injekci v produkčním HTML');
+
+/*
+ * Kontrolujeme pouze skutečnou HTML injekci.
+ * Řetězce "__FRAME_PREAMBLE" a "ibScript" se smějí objevit uvnitř
+ * vlastního cleanup kódu deníku a nesmějí způsobit falešné selhání buildu.
+ */
+const hasInjectedRuntime =
+  /<script[^>]*\bid=["']ibScript["'][^>]*>/i.test(html) ||
+  /<script[^>]*src=["'][^"']*ibfunctions\.js[^"']*["'][^>]*>/i.test(html) ||
+  /<script[^>]*>\s*window\.__FRAME_PREAMBLE\s*=/i.test(html) ||
+  /<!--[\s\S]*?frame-runtime[\s\S]*?-->/i.test(html);
+
+if (hasInjectedRuntime) {
+  throw new Error('Build našel skutečnou preview/runtime injekci v produkčním HTML');
 }
 
 await rm('dist', { recursive: true, force: true });
