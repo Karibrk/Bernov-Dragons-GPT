@@ -697,7 +697,7 @@ async function cloudPublish(){var k=cloudAsk();if(!k)return;var ver=D.VERSION||"
  try{msg("Publikuji na GitHub…");var r=await fetch("/api/publish",{method:"POST",headers:cloudHeaders(),body:JSON.stringify({version:ver,html:selfHtml()})});
  if(!r.ok)throw new Error((await r.text()).slice(0,260));var j=await r.json();msg("✓ Publikováno: "+j.filename);
  }catch(e){msg("Publikace selhala: "+e.message);}}
-function inferLifeCharacters(t){t=(t||"").toLowerCase();var map={karibrk:["karibrk","kari","tati"],elie:["elie"],ula:["ula"],tina:["tina"],sandor:["sandor"],mer:["mer"],dedek:["dědek","dedek"]},o=[];
+function inferLifeCharacters(t){t=(t||"").toLowerCase();var map={karibrk:["karibrk","kari","tati"],elie:["elie"],ula:["ula"],tina:["tina"],sandor:["sandor"],mer:["mer"],dedek:["dědek","dedek"],uhlik:["uhlík","uhlik","pes"]},o=[];
  Object.keys(map).forEach(function(id){for(var i=0;i<map[id].length;i++)if(t.indexOf(map[id][i])>=0){o.push(id);break;}});return o;}
 async function lifeAI(id){var rec=null;(S.life||[]).forEach(function(x){if(x.id===id)rec=x;});if(!rec)return;var k=cloudAsk();if(!k)return;
  var pref=imageProvider();
@@ -2077,6 +2077,15 @@ function imgView(key){var PK=window.MEDIA_PACK||{},src=/^https?:\/\//i.test(key)
 
 /* ===================== KRONIKA ===================== */
 function allChron(){return CHRON.concat(S.chron||[]);}
+function chronSceneText(s){return (s.blocks||[]).filter(function(b){return b.k!=="hr";}).map(function(b){return strip(b.t||"");}).join("\n\n").trim();}
+async function chronAI(index){
+ var s=allChron()[index], text=s&&chronSceneText(s); if(!text){msg("Tato kapitola nemá text pro obrázek.");return;}
+ if(!cloudAsk())return;
+ if(!S.life)S.life=[];
+ var rec={id:lifeId(),d:S.day,t:"Kronika — "+s.title+"\n\n"+text.slice(0,6000),img:"",source:{kind:"kronika",title:s.title,index:index}};
+ S.life.push(rec);save();
+ await lifeAI(rec.id);
+}
 function drawK(){
  var A=allChron();
  var h='<div class="row" style="margin-bottom:10px">'+
@@ -2094,7 +2103,8 @@ function drawK(){
 function renderSec(q){
  var A=allChron(), s=A[S.sec];
  if(!s){$("#kRead").innerHTML="";return;}
- var r='<h2 style="margin-bottom:12px">'+esc(s.title)+'</h2>';
+ var r='<div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin-bottom:12px">'+esc(s.title)+'</h2><button class="sm go" data-a="chronai" data-v="'+S.sec+'">✦ AI obrázek z kapitoly</button></div>';
+ r+='<p class="hint" style="margin-top:0">Vytvoří nový střípek z celé kapitoly a pošle jej do generátoru včetně rozpoznaných postav a Uhlíka.</p>';
  s.blocks.forEach(function(b){
   if(b.k==="hr"){r+='<div class="blk hr"></div>';return;}
   var t=b.t;
@@ -2713,6 +2723,7 @@ document.addEventListener("click", function(ev){
   case "sec": S.sec=+v; save(); drawK(); window.scrollTo(0,0); break;
   case "secmv": { var A=allChron(); S.sec=Math.max(0,Math.min(A.length-1,S.sec+(+v))); save(); drawK(); window.scrollTo(0,0); break;}
   case "find": findK(); break;
+  case "chronai": chronAI(+v); break;
   case "newchap": if(!$("#chapF"))chapForm(); break;
   case "chapx": { var f=$("#chapF"); if(f)f.remove(); break;}
   case "chapsave": chapSave(); break;

@@ -9,7 +9,8 @@ const REGISTRY={
  sandor:{path:'/denik-media/refs/portraits/sandor.webp',note:'adult half-orc fighter; preserve exact face and half-orc traits'},
  mer:{path:'/denik-media/refs/portraits/mer.webp',note:'adult grave cleric; preserve exact face'},
  ula:{path:'/denik-media/refs/portraits/ula.webp',note:'girl appearing about 14; preserve exact face and apparent age'},
- dedek:{path:'/denik-media/refs/portraits/dedek.webp',note:'boy appearing about 11; preserve exact face and apparent age'}
+ dedek:{path:'/denik-media/refs/portraits/dedek.webp',note:'boy appearing about 11; preserve exact face and apparent age'},
+ uhlik:{path:'/denik-media/refs/portraits/Uhlik.jpeg',note:'Uhlík, the campaign dog; preserve his exact coat, markings and proportions'}
 };
 
 function abs(req,p){const proto=String(req.headers['x-forwarded-proto']||'https').split(',')[0];return `${proto}://${req.headers.host}${p}`;}
