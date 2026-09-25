@@ -1,7 +1,14 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { isAllowedKey } from './_auth.js';
 
-const resource = 'https://500900.website/api/mcp';
+export function appBaseUrl() {
+  const explicit = process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL;
+  if (explicit) return explicit.replace(/\/+$/, '');
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return 'https://500900.website';
+}
+
+const resource = new URL('/api/mcp', appBaseUrl()).toString();
 let jwks;
 
 function auth0Config() {
@@ -61,4 +68,8 @@ export function requiredScopeForMcpRequest(body) {
 
 export function protectedResourceUrl() {
   return resource;
+}
+
+export function protectedResourceMetadataUrl() {
+  return new URL('/.well-known/oauth-protected-resource', appBaseUrl()).toString();
 }
