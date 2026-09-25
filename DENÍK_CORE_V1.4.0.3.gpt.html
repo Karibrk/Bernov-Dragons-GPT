@@ -417,10 +417,12 @@ var KEY="denik.v4";
 
 /* --- pomocné --- */
 function $(s){return document.querySelector(s);}
-/* ---------- OBRÁZKY (AI_IMAGE_GUIDE): denik-media/, když soubor chybí, img zmizí ---------- */
-var MEDIA="denik-media/";
+/* ---------- VESTAVĚNÁ MÉDIA: denik-media/; generované obrázky jsou vždy ve Vercel Blob pod art/<kategorie>/ ---------- */
+var STATIC_MEDIA_ROOT="denik-media/";
+var GENERATED_IMAGE_ROOT="art/";
+var MEDIA=STATIC_MEDIA_ROOT;
 function slug(s){return String(s==null?"":s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");}
-/* pevná struktura denik-media: portraits, avatars, npcs, locations, items, icons, other, data */
+/* Pevná struktura vestavěných médií: portraits, avatars, npcs, locations, items, icons, other, data. */
 var MDIRS={portraits:["portraits","avatars","npcs"],companions:["npcs","avatars"],maps:["locations"],items:["items","icons"],other:["other"]};
 function mpaths(dir,names){var o=[],ds=MDIRS[dir]||[dir];ds.forEach(function(d){names.forEach(function(n){if(!n)return;["webp","png","jpeg","jpg"].forEach(function(x){var p=d+"/"+n+"."+x;if(o.indexOf(p)<0)o.push(p);});});});return o;}
 function mimg(list,cls){if(!list||!list.length)return "";
@@ -436,9 +438,9 @@ var MEDIA_ITEM={"pulka-medailonu-upis":"medailon","medailon":"medailon","karibrk
 var MEDIA_MAP={"u-tri-vran":"u-tri-vran","baldurova-brana":"baldurs-gate","soukenicka-ulicka":"soukenicka"};
 var MEDIA_COMP={"prisluhovac-verna-hlina-a-kost":["verma-hlina-kost","verna-hlina-kost","verna-hlina-a-kost"],"pes":["uhlik"]};
 var MEDIA_EXACT={
- "volo":"portraits/Volo.jpeg",
- "pes":"portraits/Uhlik.jpeg",
- "hrobovy-cerv":"portraits/Cerv.jpeg"
+ "volo":"portraits/Volo.png",
+ "pes":"portraits/Uhlik.png",
+ "hrobovy-cerv":"portraits/Cerv.png"
 };
 function portraitSource(id){
  var PK=window.MEDIA_PACK||{};
@@ -568,6 +570,18 @@ function safeDraw(name,fn,target){
    if(n)n.innerHTML='<div class="box warn"><b>'+esc(name)+' se nepodařilo vykreslit.</b><p class="hint">Starší uložený stav byl zachován. Obnov stránku; pokud problém trvá, otevři Přenos a stáhni zálohu. Technicky: '+esc(e&&e.message?e.message:String(e))+'</p></div>';
  }
 }
+function generatedImageCategory(url){
+ var m=new RegExp('/'+GENERATED_IMAGE_ROOT+'([^/]+)/').exec(String(url||''));
+ return m&&IMAGE_CATEGORIES.some(function(x){return x[0]===m[1];})?m[1]:"fragments";
+}
+function normalizeGeneratedImageState(){
+ (S.life||[]).forEach(function(rec){
+  if(!rec)return;
+  var category=generatedImageCategory(rec.img);
+  if(!rec.imageCategory)rec.imageCategory=(rec.source&&rec.source.kind==="kronika")?"chronicle":category;
+  if(rec.imageMeta&& !rec.imageMeta.category)rec.imageMeta.category=rec.imageCategory;
+ });
+}
 function postInit(){
  normalizeHostedState();
  if(!S.bag) S.bag=JSON.parse(JSON.stringify(BAG_SEED||[]));
@@ -580,6 +594,7 @@ function postInit(){
  if(!S.verdict) S.verdict={}; if(!S.lore) S.lore=[]; if(!S.loreDel) S.loreDel=[];
  if(!S.resources) S.resources={};
  if(!S.life) S.life=[]; if(!S.lifeGone) S.lifeGone=[];
+ normalizeGeneratedImageState();
  if(!S.imggen||typeof S.imggen!=="object") S.imggen={status:"Připraveno.",log:[],lastSystem:""};
  if(!Array.isArray(S.imggen.log)) S.imggen.log=[];
  if(S.imggen.status===undefined) S.imggen.status="Připraveno.";
@@ -607,10 +622,12 @@ function cloudRemember(k){if(!k)return;try{localStorage.setItem("bandd.sync.key"
 function cloudAsk(){var k=cloudKey();if(k)return k;k=prompt("Cloud klíč B&D — zadáš jednou, zařízení si ho zapamatuje:")||"";
  if(k)cloudRemember(k);return k;}
 function cloudHeaders(){var k=cloudKey();return {"Content-Type":"application/json","x-bandd-key":k};}
-function imageProvider(){try{return localStorage.getItem("bandd.image.provider")||"auto";}catch(e){return "auto";}}
+function imageProvider(){try{var v=localStorage.getItem("bandd.image.provider")||"free";return v==="auto"?"free":v;}catch(e){return "free";}}
 function imageProviderSet(v){v=v||"auto";try{localStorage.setItem("bandd.image.provider",v);}catch(e){}var txt="✦ Generátor obrázků: "+imageProviderLabel(v);imggenPush("provider",txt);msg(txt);}
-function imageProviderLabel(v){return ({auto:"Auto · free první",huggingface:"Hugging Face · free kredity",gateway:"Vercel AI Gateway",openai:"OpenAI",random:"Náhodně"})[v]||v;}
-function imageProviderOptions(){var cur=imageProvider(),opts=[["auto","Auto · free první"],["huggingface","Hugging Face · free kredity"],["gateway","Vercel AI Gateway"],["openai","OpenAI"],["random","Náhodně"]];return opts.map(function(o){return '<option value="'+o[0]+'"'+(cur===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join("");}
+function imageProviderLabel(v){return ({free:"Bezplatné · Hugging Face",paid:"Placené · Vercel AI Gateway"})[v]||v;}
+function imageProviderOptions(){var cur=imageProvider(),opts=[["free","Bezplatné · Hugging Face"],["paid","Placené · Vercel AI Gateway"]];return opts.map(function(o){return '<option value="'+o[0]+'"'+(cur===o[0]?' selected':'')+'>'+o[1]+'</option>';}).join("");}
+async function imageSpend(){var k=cloudAsk();if(!k)return null;try{var r=await fetch("/api/image-spend",{headers:{"x-bandd-key":k}});if(!r.ok)throw new Error();return await r.json();}catch(e){return null;}}
+function paidImagePassword(){return prompt("Heslo pro placené generování (cloudový B&D klíč):")||"";}
 function imggenState(){
  if(!S.imggen||typeof S.imggen!=="object")S.imggen={status:"Připraveno.",log:[],lastSystem:""};
  if(!Array.isArray(S.imggen.log))S.imggen.log=[];
@@ -640,7 +657,7 @@ function imggenClear(){
 function imgGenPanel(){
  var g=imggenState();
  return '<div class="box hi"><h3 class="lbl" style="color:var(--furn);border-bottom-color:var(--furnd)">AI obrazárna</h3>'+
-  '<p class="hint" style="margin-top:0">Provider nastavíš tady nahoře. Samotná tlačítka ✦ AI obrázek zůstávají u jednotlivých střípků, ale už kvůli provideru nemusíš rolovat dolů.</p>'+
+  '<p class="hint" style="margin-top:0">Vyber bezplatný Hugging Face nebo placený Vercel AI Gateway. Placený režim vyžaduje heslo, nic nedobíjí ani nekupuje automaticky. Nano Banana Pro: od $0.13 za obraz + tokenová spotřeba.</p>'+
   '<div class="row" style="margin:4px 0 10px"><span class="chip">🎨 provider</span><select id="imgProviderTop" onchange="imageProviderSet(this.value)" style="max-width:280px">'+imageProviderOptions()+'</select><button class="sm" data-a="goto" data-v="stripky">Otevřít Střípky</button><button class="sm" data-a="imglogclear">Vyčistit log</button></div>'+
   '<div class="pline"><b>Aktuální stav</b><span id="imgGenStatus">'+esc(g.status||"Připraveno.")+'</span></div>'+
   '<div class="pline"><b>Poslední zpráva systému</b><span id="imgSysLast">'+esc(g.lastSystem||"—")+'</span></div>'+
@@ -697,20 +714,22 @@ async function cloudPublish(){var k=cloudAsk();if(!k)return;var ver=D.VERSION||"
  try{msg("Publikuji na GitHub…");var r=await fetch("/api/publish",{method:"POST",headers:cloudHeaders(),body:JSON.stringify({version:ver,html:selfHtml()})});
  if(!r.ok)throw new Error((await r.text()).slice(0,260));var j=await r.json();msg("✓ Publikováno: "+j.filename);
  }catch(e){msg("Publikace selhala: "+e.message);}}
-function inferLifeCharacters(t){t=(t||"").toLowerCase();var map={karibrk:["karibrk","kari","tati"],elie:["elie"],ula:["ula"],tina:["tina"],sandor:["sandor"],mer:["mer"],dedek:["dědek","dedek"]},o=[];
+function inferLifeCharacters(t){t=(t||"").toLowerCase();var map={karibrk:["karibrk","kari","tati"],elie:["elie"],ula:["ula"],tina:["tina"],sandor:["sandor"],mer:["mer"],dedek:["dědek","dedek"],uhlik:["uhlík","uhlik","pes"],volo:["volo"],cerv:["hrobový červ","hrobovy cerv","červ","cerv"]},o=[];
  Object.keys(map).forEach(function(id){for(var i=0;i<map[id].length;i++)if(t.indexOf(map[id][i])>=0){o.push(id);break;}});return o;}
 async function lifeAI(id){var rec=null;(S.life||[]).forEach(function(x){if(x.id===id)rec=x;});if(!rec)return;var k=cloudAsk();if(!k)return;
- var pref=imageProvider();
- try{var startMsg="✦ Generuji obraz pro "+id+" · "+imageProviderLabel(pref)+"…";imggenPush("start",startMsg);msg(startMsg);var r=await fetch("/api/fragment-image",{method:"POST",headers:cloudHeaders(),body:JSON.stringify({id:rec.id,day:rec.d,text:strip(rec.t||""),characters:inferLifeCharacters(rec.t||""),provider:pref})});
+ var pref=imageProvider(), paidPassword="";
+ if(pref==="paid"){var spend=await imageSpend();if(!spend||!spend.available||typeof spend.remaining!=="number"){msg("Placený zůstatek AI Gateway teď není dostupný; generování bylo zablokováno.");return;}paidPassword=paidImagePassword();if(!paidPassword)return;msg("AI Gateway: zbývá $"+spend.remaining.toFixed(4)+". Sazba Nano Banana Pro začíná na $0.13 za obraz plus tokenová spotřeba.");}
+ try{var startMsg="✦ Generuji obraz pro "+id+" · "+imageProviderLabel(pref)+"…";imggenPush("start",startMsg);msg(startMsg);var r=await fetch("/api/fragment-image",{method:"POST",headers:cloudHeaders(),body:JSON.stringify({id:rec.id,day:rec.d,text:strip(rec.t||""),characters:inferLifeCharacters(rec.t||""),category:rec.imageCategory||"fragments",provider:pref,paidPassword:paidPassword})});
  var j={};try{j=await r.json();}catch(_e){}
  if(!r.ok){
+  if(j.code==="PAID_PASSWORD_REQUIRED")throw new Error("Heslo pro placené generování nesouhlasí.");
   if(j.code==="AI_BILLING_REQUIRED")throw new Error("Vercel AI Gateway chce ověřenou platební metodu. Přepni generátor na Hugging Face, nebo přidej jiného providera.");
   if(j.code==="PROVIDER_NOT_CONFIGURED")throw new Error("Zvolený poskytovatel nemá na Vercelu API klíč. "+(j.hint||""));
   if(j.code==="ALL_PROVIDERS_FAILED")throw new Error("Všechny dostupné generátory selhaly. "+((j.failures||[]).map(function(x){return x.provider+": "+x.error;}).join(" · ")));
   if(r.status===401)throw new Error("Cloud klíč nesouhlasí. Otevři Přenos → Připojit cloud a ulož správný klíč.");
   throw new Error(j.error||("HTTP "+r.status));
  }
- rec.img=j.url;rec.imageMeta={model:j.model,provider:j.provider||"",characters:j.characters||[],references:j.references||[],createdAt:j.createdAt};save();drawZS();var okMsg="✦ Obrázek hotový přes "+imageProviderLabel(j.provider||pref)+" a uložený v Blob.";imggenPush("ok",okMsg);msg(okMsg);
+ rec.img=j.url;rec.imageMeta={model:j.model,provider:j.provider||"",category:j.category||rec.imageCategory||"fragments",format:j.format||"image/png",characters:j.characters||[],references:j.references||[],createdAt:j.createdAt};save();drawZS();var okMsg="✦ Obrázek hotový přes "+imageProviderLabel(pref)+" a uložený v Blob."+(pref==="paid"?(typeof j.creditsRemaining==="number"?" Zbývá: $"+j.creditsRemaining.toFixed(4)+".":" Zůstatek se nepodařilo načíst."):"");imggenPush("ok",okMsg);msg(okMsg);
  }catch(e){var errMsg="AI obrázek: "+e.message;imggenPush("error",errMsg);msg(errMsg);}}
 
 
@@ -1640,7 +1659,7 @@ function minionBox(id,c){
  var lv='';for(var L=1;L<=9;L++)lv+='<option value="'+L+'"'+(L===3?' selected':'')+'>pozice '+L+'.</option>';
  h+='<div class="row" style="margin-top:10px;flex-wrap:wrap;gap:6px"><select id="mnT">'+opt+'</select><select id="mnL">'+lv+'</select>'+
    '<button class="sm go" data-a="mnadd">☠ Vyvolat</button>'+(A.length?'<button class="sm" data-a="mnconc">Ztráta soustředění</button><button class="sm" data-a="mnclear">Rozpustit vše</button>':'')+'</div>';
- h+='<p class="hint" style="margin-top:6px">Životy už obsahují Nemrtvé poddané (+'+NP_HP+'), útoky +5 ke zranění. Pozice pod základní úrovní kouzla se zvedne na základní. Statistiky a pravidla: Lore → Hrobopis. Obrázky: denik-media/companions/&lt;slug&gt;.webp</p>';
+ h+='<p class="hint" style="margin-top:6px">Životy už obsahují Nemrtvé poddané (+'+NP_HP+'), útoky +5 ke zranění. Pozice pod základní úrovní kouzla se zvedne na základní. Statistiky a pravidla: Lore → Hrobopis. Vestavěné portréty: denik-media/refs/portraits; generované obrázky: art/&lt;kategorie&gt;/</p>';
  return h+'</div>';}
 function prepList(id){
  var c=CHARS[id], out=[];
@@ -2038,6 +2057,9 @@ function drawDom(){
 
 
 /* ---------- STŘÍPKY ZE ŽIVOTA (Domov): krátké události + obrázky z MEDIA_PACK ---------- */
+var IMAGE_CATEGORIES=[["fragments","Střípky"],["chronicle","Kronika"],["characters","Postavy"],["items","Předměty"],["maps","Mapy"],["locations","Místa"],["creatures","Bytosti"],["scenes","Scény"]];
+function imageCategoryLabel(id){for(var i=0;i<IMAGE_CATEGORIES.length;i++)if(IMAGE_CATEGORIES[i][0]===id)return IMAGE_CATEGORIES[i][1];return "Střípky";}
+function imageCategoryOptions(cur){return IMAGE_CATEGORIES.map(function(x){return '<option value="'+x[0]+'"'+(x[0]===(cur||"fragments")?' selected':'')+'>'+x[1]+'</option>';}).join("");}
 function lifeId(){var mx=0;(S.life||[]).forEach(function(x){var m=/^ZS-(\d+)$/.exec(x.id||"");if(m)mx=Math.max(mx,+m[1]);});
  (S.lifeGone||[]).forEach(function(g){var m=/^ZS-(\d+)$/.exec(g);if(m)mx=Math.max(mx,+m[1]);});var s=String(mx+1);while(s.length<4)s="0"+s;return "ZS-"+s;}
 function lifeImg(key){if(!key)return "";var PK=window.MEDIA_PACK||{};
@@ -2060,7 +2082,7 @@ function lifeBox(){
  return h;}
 function lifeForm(id){
  var x=null;(S.life||[]).forEach(function(y){if(y.id===id)x=y;});
- var nw=!x; if(nw)x={id:lifeId(),d:S.day,t:"",img:""};
+ var nw=!x; if(nw)x={id:lifeId(),d:S.day,t:"",img:"",imageCategory:"fragments"};
  var keys=Object.keys(window.MEDIA_PACK||{}).sort();
  var o='<option value="">— bez obrázku —</option>';
  keys.forEach(function(k){o+='<option'+(k===x.img?' selected':'')+'>'+esc(k)+'</option>';});
@@ -2068,6 +2090,7 @@ function lifeForm(id){
  var hh='<div class="ovbox"><h3 class="lbl">'+(nw?"Nový střípek":"Úprava střípku")+' — '+esc(x.id)+'</h3>'+
   '<div class="ffield"><label>den</label><input type="text" id="l_d" value="'+esc(x.d)+'"></div>'+
   '<div class="ffield"><label>obrázek</label><select id="l_img">'+o+'</select></div>'+
+  '<div class="ffield"><label>kategorie generovaného obrázku</label><select id="l_cat">'+imageCategoryOptions(x.imageCategory)+'</select></div>'+
   '<div class="ffield"><label>text</label><textarea id="l_t">'+esc(x.t||"")+'</textarea></div>'+
   '<div class="row"><button class="go" data-a="lifesave" data-v="'+esc(x.id)+'|'+(nw?1:0)+'">Uložit</button><button data-a="ovx">Zrušit</button></div></div>';
  var old=$("#ovl");if(old)old.remove();var d=document.createElement("div");d.id="ovl";d.style.overflowY="auto";d.innerHTML=hh;document.body.appendChild(d);}
@@ -2077,6 +2100,15 @@ function imgView(key){var PK=window.MEDIA_PACK||{},src=/^https?:\/\//i.test(key)
 
 /* ===================== KRONIKA ===================== */
 function allChron(){return CHRON.concat(S.chron||[]);}
+function chronSceneText(s){return (s.blocks||[]).filter(function(b){return b.k!=="hr";}).map(function(b){return strip(b.t||"");}).join("\n\n").trim();}
+async function chronAI(index){
+ var s=allChron()[index], text=s&&chronSceneText(s); if(!text){msg("Tato kapitola nemá text pro obrázek.");return;}
+ if(!cloudAsk())return;
+ if(!S.life)S.life=[];
+ var rec={id:lifeId(),d:S.day,t:"Kronika — "+s.title+"\n\n"+text.slice(0,6000),img:"",imageCategory:"chronicle",source:{kind:"kronika",title:s.title,index:index}};
+ S.life.push(rec);save();
+ await lifeAI(rec.id);
+}
 function drawK(){
  var A=allChron();
  var h='<div class="row" style="margin-bottom:10px">'+
@@ -2094,7 +2126,8 @@ function drawK(){
 function renderSec(q){
  var A=allChron(), s=A[S.sec];
  if(!s){$("#kRead").innerHTML="";return;}
- var r='<h2 style="margin-bottom:12px">'+esc(s.title)+'</h2>';
+ var r='<div class="row" style="justify-content:space-between;align-items:center"><h2 style="margin-bottom:12px">'+esc(s.title)+'</h2><button class="sm go" data-a="chronai" data-v="'+S.sec+'">✦ AI obrázek z kapitoly</button></div>';
+ r+='<p class="hint" style="margin-top:0">Vytvoří nový střípek z celé kapitoly a pošle jej do generátoru včetně rozpoznaných postav a Uhlíka.</p>';
  s.blocks.forEach(function(b){
   if(b.k==="hr"){r+='<div class="blk hr"></div>';return;}
   var t=b.t;
@@ -2713,6 +2746,7 @@ document.addEventListener("click", function(ev){
   case "sec": S.sec=+v; save(); drawK(); window.scrollTo(0,0); break;
   case "secmv": { var A=allChron(); S.sec=Math.max(0,Math.min(A.length-1,S.sec+(+v))); save(); drawK(); window.scrollTo(0,0); break;}
   case "find": findK(); break;
+  case "chronai": chronAI(+v); break;
   case "newchap": if(!$("#chapF"))chapForm(); break;
   case "chapx": { var f=$("#chapF"); if(f)f.remove(); break;}
   case "chapsave": chapSave(); break;
@@ -2752,7 +2786,7 @@ document.addEventListener("click", function(ev){
    if(!S.life)S.life=[];
    var rec=null; S.life.forEach(function(y){if(y.id===lid)rec=y;});
    if(!rec){rec={id:lid}; S.life.push(rec);}
-   rec.d=parseInt($("#l_d").value,10)||S.day; rec.t=lt; rec.img=$("#l_img").value||"";
+   rec.d=parseInt($("#l_d").value,10)||S.day; rec.t=lt; rec.img=$("#l_img").value||""; rec.imageCategory=$("#l_cat").value||"fragments";
    var ol=$("#ovl"); if(ol)ol.remove(); save(); drawZS(); msgSaved("Střípek "+lid+" uložen."); break;}
   case "lifedel": {
    var ix=-1;(S.life||[]).forEach(function(y,i){if(y.id===v)ix=i;});

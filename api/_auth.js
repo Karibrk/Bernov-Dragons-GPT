@@ -40,6 +40,15 @@ export function requireKey(req, res) {
   return true;
 }
 
+export function requirePaidImagePassword(req, res) {
+  const password = String(req.body?.paidPassword || '');
+  if (!isAllowedKey(password)) {
+    res.status(403).json({ ok:false, code:'PAID_PASSWORD_REQUIRED', error:'Placené generování vyžaduje heslo.' });
+    return false;
+  }
+  return true;
+}
+
 export function blobAuth() {
   if (process.env.BLOB_READ_WRITE_TOKEN) return { token: process.env.BLOB_READ_WRITE_TOKEN };
   if (process.env.VERCEL_OIDC_TOKEN) return { oidcToken: process.env.VERCEL_OIDC_TOKEN };
