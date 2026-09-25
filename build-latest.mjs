@@ -21,7 +21,7 @@ function stripPreviewRuntime(html) {
   return html
     .replace(/<script[^>]*\bid=["']ibScript["'][^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<script[^>]*src=["'][^"']*ibfunctions\.js[^"']*["'][^>]*>\s*<\/script>/gi, '')
-    .replace(/<!--\s*frame-runtime\s*-->/gi, '')
+    .replace(/<!--[\s\S]*?frame-runtime[\s\S]*?-->/gi, '')
     .replace(/<script>\s*window\.__FRAME_PREAMBLE\s*=[\s\S]*?<\/script>/g, '')
     .replace(/<script>\(function\(\)\{"use strict";function sr\(t\)\{return t==="cookie"[\s\S]*?<\/script>/g, '');
 }
@@ -58,7 +58,7 @@ const html = enforceFilenameVersion(cleaned, latest.version);
 if (!html.includes(`window.DATA={"VERSION":"${latest.version}"`)) {
   throw new Error(`Build odmítl publikovat jinou verzi než ${latest.version}`);
 }
-if (/window\.__FRAME_PREAMBLE\s*=/.test(html) || /id=["']ibScript["']/.test(html) || /ibfunctions\.js/.test(html)) {
+if (/window\.__FRAME_PREAMBLE/.test(html) || /ibScript/.test(html) || /ibfunctions\.js/.test(html) || /frame-runtime/.test(html)) {
   throw new Error('Build našel preview/runtime injekci v produkčním HTML');
 }
 
