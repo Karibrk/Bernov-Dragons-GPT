@@ -4,8 +4,9 @@ import { isAllowedKey } from './_auth.js';
 export function appBaseUrl() {
   const explicit = process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_SITE_URL;
   if (explicit) return explicit.replace(/\/+$/, '');
+  if (process.env.VERCEL_ENV === 'production') return 'https://www.500900.website';
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return 'https://500900.website';
+  return 'https://www.500900.website';
 }
 
 const resource = new URL('/api/mcp', appBaseUrl()).toString();
