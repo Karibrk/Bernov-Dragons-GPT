@@ -1,6 +1,6 @@
 import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 import { z } from 'zod';
-import { authenticateMcpToken, hasScope, protectedResourceUrl, requiredScopeForMcpRequest } from './_mcp-auth.js';
+import { authenticateMcpToken, hasScope, protectedResourceMetadataUrl, requiredScopeForMcpRequest } from './_mcp-auth.js';
 import { asWebRequest, sendWebResponse } from './_web.js';
 import { loadState, saveState } from './_state.js';
 import { getBackendStatus } from './_status.js';
@@ -15,7 +15,7 @@ const mcpHandler = createMcpHandler((server) => {
 
 const securedMcpHandler = withMcpAuth(mcpHandler, async (_request, token) => authenticateMcpToken(token), {
   required: true,
-  resourceUrl: protectedResourceUrl(),
+  resourceMetadataPath: '/.well-known/oauth-protected-resource',
 });
 
 export default async function handler(req, res) {
@@ -27,7 +27,7 @@ export default async function handler(req, res) {
   let auth;
   try { auth = await authenticateMcpToken(token); } catch {}
   if (requiredScope && auth && !hasScope(auth, requiredScope)) {
-    return sendWebResponse(res, new Response(JSON.stringify({ jsonrpc: '2.0', id: payload?.id ?? null, error: { code: -32001, message: `Missing required scope: ${requiredScope}` } }), { status: 403, headers: { 'content-type': 'application/json', 'www-authenticate': `Bearer error="insufficient_scope", scope="${requiredScope}", resource_metadata="https://500900.website/.well-known/oauth-protected-resource"` } }));
+    return sendWebResponse(res, new Response(JSON.stringify({ jsonrpc: '2.0', id: payload?.id ?? null, error: { code: -32001, message: `Missing required scope: ${requiredScope}` } }), { status: 403, headers: { 'content-type': 'application/json', 'www-authenticate': `Bearer error="insufficient_scope", scope="${requiredScope}", resource_metadata="${protectedResourceMetadataUrl()}"` } }));
   }
   return sendWebResponse(res, await securedMcpHandler(request));
 }
