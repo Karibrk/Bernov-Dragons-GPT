@@ -704,7 +704,7 @@ function inferLifeCharacters(t){t=(t||"").toLowerCase();var map={karibrk:["karib
 async function lifeAI(id){var rec=null;(S.life||[]).forEach(function(x){if(x.id===id)rec=x;});if(!rec)return;var k=cloudAsk();if(!k)return;
  var pref=imageProvider(), paidPassword="";
  if(pref==="paid"){var spend=await imageSpend();if(!spend||!spend.available||typeof spend.remaining!=="number"){msg("Placený zůstatek AI Gateway teď není dostupný; generování bylo zablokováno.");return;}paidPassword=paidImagePassword();if(!paidPassword)return;msg("AI Gateway: zbývá $"+spend.remaining.toFixed(4)+". Sazba Nano Banana Pro začíná na $0.13 za obraz plus tokenová spotřeba.");}
- try{var startMsg="✦ Generuji obraz pro "+id+" · "+imageProviderLabel(pref)+"…";imggenPush("start",startMsg);msg(startMsg);var r=await fetch("/api/fragment-image",{method:"POST",headers:cloudHeaders(),body:JSON.stringify({id:rec.id,day:rec.d,text:strip(rec.t||""),characters:inferLifeCharacters(rec.t||""),provider:pref,paidPassword:paidPassword})});
+ try{var startMsg="✦ Generuji obraz pro "+id+" · "+imageProviderLabel(pref)+"…";imggenPush("start",startMsg);msg(startMsg);var r=await fetch("/api/fragment-image",{method:"POST",headers:cloudHeaders(),body:JSON.stringify({id:rec.id,day:rec.d,text:strip(rec.t||""),characters:inferLifeCharacters(rec.t||""),category:rec.imageCategory||"fragments",provider:pref,paidPassword:paidPassword})});
  var j={};try{j=await r.json();}catch(_e){}
  if(!r.ok){
   if(j.code==="PAID_PASSWORD_REQUIRED")throw new Error("Heslo pro placené generování nesouhlasí.");
@@ -714,7 +714,7 @@ async function lifeAI(id){var rec=null;(S.life||[]).forEach(function(x){if(x.id=
   if(r.status===401)throw new Error("Cloud klíč nesouhlasí. Otevři Přenos → Připojit cloud a ulož správný klíč.");
   throw new Error(j.error||("HTTP "+r.status));
  }
- rec.img=j.url;rec.imageMeta={model:j.model,provider:j.provider||"",format:j.format||"image/png",characters:j.characters||[],references:j.references||[],createdAt:j.createdAt};save();drawZS();var okMsg="✦ Obrázek hotový přes "+imageProviderLabel(pref)+" a uložený v Blob."+(pref==="paid"?(typeof j.creditsRemaining==="number"?" Zbývá: $"+j.creditsRemaining.toFixed(4)+".":" Zůstatek se nepodařilo načíst."):"");imggenPush("ok",okMsg);msg(okMsg);
+ rec.img=j.url;rec.imageMeta={model:j.model,provider:j.provider||"",category:j.category||rec.imageCategory||"fragments",format:j.format||"image/png",characters:j.characters||[],references:j.references||[],createdAt:j.createdAt};save();drawZS();var okMsg="✦ Obrázek hotový přes "+imageProviderLabel(pref)+" a uložený v Blob."+(pref==="paid"?(typeof j.creditsRemaining==="number"?" Zbývá: $"+j.creditsRemaining.toFixed(4)+".":" Zůstatek se nepodařilo načíst."):"");imggenPush("ok",okMsg);msg(okMsg);
  }catch(e){var errMsg="AI obrázek: "+e.message;imggenPush("error",errMsg);msg(errMsg);}}
 
 
@@ -2042,6 +2042,9 @@ function drawDom(){
 
 
 /* ---------- STŘÍPKY ZE ŽIVOTA (Domov): krátké události + obrázky z MEDIA_PACK ---------- */
+var IMAGE_CATEGORIES=[["fragments","Střípky"],["chronicle","Kronika"],["characters","Postavy"],["items","Předměty"],["maps","Mapy"],["locations","Místa"],["creatures","Bytosti"],["scenes","Scény"]];
+function imageCategoryLabel(id){for(var i=0;i<IMAGE_CATEGORIES.length;i++)if(IMAGE_CATEGORIES[i][0]===id)return IMAGE_CATEGORIES[i][1];return "Střípky";}
+function imageCategoryOptions(cur){return IMAGE_CATEGORIES.map(function(x){return '<option value="'+x[0]+'"'+(x[0]===(cur||"fragments")?' selected':'')+'>'+x[1]+'</option>';}).join("");}
 function lifeId(){var mx=0;(S.life||[]).forEach(function(x){var m=/^ZS-(\d+)$/.exec(x.id||"");if(m)mx=Math.max(mx,+m[1]);});
  (S.lifeGone||[]).forEach(function(g){var m=/^ZS-(\d+)$/.exec(g);if(m)mx=Math.max(mx,+m[1]);});var s=String(mx+1);while(s.length<4)s="0"+s;return "ZS-"+s;}
 function lifeImg(key){if(!key)return "";var PK=window.MEDIA_PACK||{};
@@ -2064,7 +2067,7 @@ function lifeBox(){
  return h;}
 function lifeForm(id){
  var x=null;(S.life||[]).forEach(function(y){if(y.id===id)x=y;});
- var nw=!x; if(nw)x={id:lifeId(),d:S.day,t:"",img:""};
+ var nw=!x; if(nw)x={id:lifeId(),d:S.day,t:"",img:"",imageCategory:"fragments"};
  var keys=Object.keys(window.MEDIA_PACK||{}).sort();
  var o='<option value="">— bez obrázku —</option>';
  keys.forEach(function(k){o+='<option'+(k===x.img?' selected':'')+'>'+esc(k)+'</option>';});
@@ -2072,6 +2075,7 @@ function lifeForm(id){
  var hh='<div class="ovbox"><h3 class="lbl">'+(nw?"Nový střípek":"Úprava střípku")+' — '+esc(x.id)+'</h3>'+
   '<div class="ffield"><label>den</label><input type="text" id="l_d" value="'+esc(x.d)+'"></div>'+
   '<div class="ffield"><label>obrázek</label><select id="l_img">'+o+'</select></div>'+
+  '<div class="ffield"><label>kategorie generovaného obrázku</label><select id="l_cat">'+imageCategoryOptions(x.imageCategory)+'</select></div>'+
   '<div class="ffield"><label>text</label><textarea id="l_t">'+esc(x.t||"")+'</textarea></div>'+
   '<div class="row"><button class="go" data-a="lifesave" data-v="'+esc(x.id)+'|'+(nw?1:0)+'">Uložit</button><button data-a="ovx">Zrušit</button></div></div>';
  var old=$("#ovl");if(old)old.remove();var d=document.createElement("div");d.id="ovl";d.style.overflowY="auto";d.innerHTML=hh;document.body.appendChild(d);}
@@ -2086,7 +2090,7 @@ async function chronAI(index){
  var s=allChron()[index], text=s&&chronSceneText(s); if(!text){msg("Tato kapitola nemá text pro obrázek.");return;}
  if(!cloudAsk())return;
  if(!S.life)S.life=[];
- var rec={id:lifeId(),d:S.day,t:"Kronika — "+s.title+"\n\n"+text.slice(0,6000),img:"",source:{kind:"kronika",title:s.title,index:index}};
+ var rec={id:lifeId(),d:S.day,t:"Kronika — "+s.title+"\n\n"+text.slice(0,6000),img:"",imageCategory:"chronicle",source:{kind:"kronika",title:s.title,index:index}};
  S.life.push(rec);save();
  await lifeAI(rec.id);
 }
@@ -2767,7 +2771,7 @@ document.addEventListener("click", function(ev){
    if(!S.life)S.life=[];
    var rec=null; S.life.forEach(function(y){if(y.id===lid)rec=y;});
    if(!rec){rec={id:lid}; S.life.push(rec);}
-   rec.d=parseInt($("#l_d").value,10)||S.day; rec.t=lt; rec.img=$("#l_img").value||"";
+   rec.d=parseInt($("#l_d").value,10)||S.day; rec.t=lt; rec.img=$("#l_img").value||""; rec.imageCategory=$("#l_cat").value||"fragments";
    var ol=$("#ovl"); if(ol)ol.remove(); save(); drawZS(); msgSaved("Střípek "+lid+" uložen."); break;}
   case "lifedel": {
    var ix=-1;(S.life||[]).forEach(function(y,i){if(y.id===v)ix=i;});

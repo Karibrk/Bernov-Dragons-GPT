@@ -3,6 +3,8 @@ import { InferenceClient } from '@huggingface/inference';
 import { requireKey, requirePaidImagePassword, blobAuth } from './_auth.js';
 import { gatewayCredits } from './image-spend.js';
 
+const ASSET_CATEGORIES=new Set(['fragments','chronicle','characters','items','maps','locations','creatures','scenes']);
+
 const REGISTRY={
  karibrk:{path:'/denik-media/refs/portraits/karibrk.webp',note:'adult male hobbit necromancer; preserve exact face and hobbit proportions'},
  elie:{path:'/denik-media/refs/portraits/elie.webp',note:'9-year-old girl; preserve exact face and age'},
@@ -77,7 +79,7 @@ async function runProvider(name,prompt,refs){if(name==='huggingface')return hugg
 
 export default async function handler(req,res){
  if(!requireKey(req,res))return;if(req.method!=='POST')return res.status(405).json({ok:false,error:'Method not allowed'});
- const id=String(req.body?.id||'fragment'),day=Number(req.body?.day||0),text=String(req.body?.text||'').trim();if(!text)return res.status(400).json({ok:false,error:'Missing fragment text'});
+ const id=String(req.body?.id||'fragment'),day=Number(req.body?.day||0),text=String(req.body?.text||'').trim(),category=String(req.body?.category||'fragments').toLowerCase();if(!text)return res.status(400).json({ok:false,error:'Missing fragment text'});if(!ASSET_CATEGORIES.has(category))return res.status(400).json({ok:false,error:'Neplatná kategorie obrázku.'});
  const chars=Array.isArray(req.body?.characters)?req.body.characters.filter(x=>REGISTRY[x]):[];
  const refs=chars.map(c=>({id:c,url:abs(req,REGISTRY[c].path),note:REGISTRY[c].note}));
  const prompt=promptFor(text,day,refs),requested=String(req.body?.provider||'free').toLowerCase();
@@ -89,10 +91,10 @@ export default async function handler(req,res){
  else return res.status(400).json({ok:false,error:'Neznámý režim generování.'});
  const failures=[];
  for(const provider of order){try{
-   const im=await runProvider(provider,prompt,refs);const ext=im.type.includes('webp')?'webp':im.type.includes('jpeg')?'jpg':'png';const path=`art/fragments/day-${String(day).padStart(3,'0')}/${slug(id)}-${Date.now()}.${ext}`;
+   const im=await runProvider(provider,prompt,refs);const ext=im.type.includes('webp')?'webp':im.type.includes('jpeg')?'jpg':'png';const path=`art/${category}/day-${String(day).padStart(3,'0')}/${slug(id)}-${Date.now()}.${ext}`;
    const blob=await put(path,im.bytes,{access:'public',contentType:im.type,addRandomSuffix:false,...blobAuth()});
    const credits=provider==='gateway'?await gatewayCredits():null;
-   return res.status(200).json({ok:true,url:blob.url,pathname:blob.pathname,format:im.type,provider:im.provider,model:im.model,characters:chars,references:provider==='huggingface'?[]:refs.map(r=>r.id),creditsRemaining:credits?.remaining??null,createdAt:new Date().toISOString(),tried:failures.map(x=>x.provider).concat(provider)});
+   return res.status(200).json({ok:true,url:blob.url,pathname:blob.pathname,category,format:im.type,provider:im.provider,model:im.model,characters:chars,references:provider==='huggingface'?[]:refs.map(r=>r.id),creditsRemaining:credits?.remaining??null,createdAt:new Date().toISOString(),tried:failures.map(x=>x.provider).concat(provider)});
   }catch(e){failures.push({provider,error:String(e.message||e).slice(0,260),code:e.code||''});}}
  const billingOnly=failures.length&&failures.every(x=>x.code==='AI_BILLING_REQUIRED');
  return res.status(billingOnly?424:502).json({ok:false,code:billingOnly?'AI_BILLING_REQUIRED':'ALL_PROVIDERS_FAILED',error:'Žádný zvolený generátor nedokončil obrázek.',failures});
