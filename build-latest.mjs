@@ -12,16 +12,41 @@ function parseVersion(version) {
 
 function compareVersion(a, b) {
   for (let i = 0; i < 4; i++) {
-    const d = a.parts[i] - b.parts[i];
+    const d = a[i] - b[i];
     if (d) return d;
   }
-  return a.name.localeCompare(b.name, 'cs');
+  return 0;
+}
+
+function chooseLatestCandidate(candidates) {
+  const byVersion = new Map();
+
+  for (const candidate of candidates) {
+    const versionCandidates = byVersion.get(candidate.version) ?? [];
+    versionCandidates.push(candidate);
+    byVersion.set(candidate.version, versionCandidates);
+  }
+
+  const conflicts = [...byVersion.entries()].filter(([, versionCandidates]) => versionCandidates.length > 1);
+  if (conflicts.length) {
+    const details = conflicts
+      .map(([version, versionCandidates]) => `${version}: ${versionCandidates.map((entry) => entry.name).join(', ')}`)
+      .join('; ');
+    throw new Error(`Conflicting release files for the same semantic version: ${details}`);
+  }
+
+  const uniqueVersions = [...byVersion.keys()].sort((left, right) =>
+    compareVersion(parseVersion(left), parseVersion(right))
+  );
+
+  const latestVersion = uniqueVersions.at(-1);
+  return byVersion.get(latestVersion)[0];
 }
 
 function stripPreviewRuntime(html) {
   return html
     .replace(/<script[^>]*\bid=["']ibScript["'][^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<script[^>]*src=["'][^"']*ibfunctions\.js[^"']*["'][^>]*>\s*<\/script>/gi, '')
+    .replace(/<script[^>]*src=["'][^"']*ibfunctions\.js[^"']["'][^>]*>\s*<\/script>/gi, '')
     .replace(/<!--[\s\S]*?frame-runtime[\s\S]*?-->/gi, '')
     .replace(/<script>\s*window\.__FRAME_PREAMBLE\s*=[\s\S]*?<\/script>/g, '')
     .replace(/<script>\(function\(\)\{"use strict";function sr\(t\)\{return t==="cookie"[\s\S]*?<\/script>/g, '');
@@ -32,17 +57,18 @@ function enforceFilenameVersion(html, version) {
   if (!current) {
     throw new Error('V HTML chybí window.DATA.VERSION');
   }
-  if (current[1] === version) return html;
-  console.warn(`DATA.VERSION=${current[1]} nesedí na filename ${version} — opravuji na ${version}`);
-  return html.replace(/window\.DATA\s*=\s*\{"VERSION":"[^"]+"/, `window.DATA={"VERSION":"${version}"`);
+  if (current[1] !== version) {
+    throw new Error(`window.DATA.VERSION="${current[1]}" nesedí s názvem souboru "${version}"`);
+  }
+  return html;
 }
 
 const entries = await readdir('.');
 const candidates = entries
   .map((name) => {
-    const m = name.match(RELEASE_RX);
-    if (!m) return null;
-    return { name, version: m[1], parts: parseVersion(m[1]) };
+    const match = name.match(RELEASE_RX);
+    if (!match) return null;
+    return { name, version: match[1], parts: parseVersion(match[1]) };
   })
   .filter(Boolean);
 
@@ -50,8 +76,7 @@ if (!candidates.length) {
   throw new Error('Nenalezen žádný DENÍK_CORE_Vx.x.x.x.gpt.html');
 }
 
-candidates.sort(compareVersion);
-const latest = candidates.at(-1);
+const latest = chooseLatestCandidate(candidates);
 const raw = await readFile(latest.name, 'utf8');
 const cleaned = stripPreviewRuntime(raw);
 const html = enforceFilenameVersion(cleaned, latest.version);
@@ -67,7 +92,7 @@ if (!html.includes(`window.DATA={"VERSION":"${latest.version}"`)) {
  */
 const hasInjectedRuntime =
   /<script[^>]*\bid=["']ibScript["'][^>]*>/i.test(html) ||
-  /<script[^>]*src=["'][^"']*ibfunctions\.js[^"']*["'][^>]*>/i.test(html) ||
+  /<script[^>]*src=["'][^"']*ibfunctions\.js[^"']["'][^>]*>/i.test(html) ||
   /<script[^>]*>\s*window\.__FRAME_PREAMBLE\s*=/i.test(html) ||
   /<!--[\s\S]*?frame-runtime[\s\S]*?-->/i.test(html);
 
